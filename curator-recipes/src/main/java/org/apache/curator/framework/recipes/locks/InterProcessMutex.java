@@ -61,7 +61,7 @@ public class InterProcessMutex implements InterProcessLock, Revocable<InterProce
      */
     public InterProcessMutex(CuratorFramework client, String path)
     {
-        this(client, path, LOCK_NAME, 1, new StandardLockInternalsDriver());
+        this(client, path, LOCK_NAME, 1, new StandardLockInternalsDriver());  // 可重入锁maxLeases=1
     }
 
     /**
@@ -211,16 +211,19 @@ public class InterProcessMutex implements InterProcessLock, Revocable<InterProce
         Thread          currentThread = Thread.currentThread();
 
         LockData        lockData = threadData.get(currentThread);
+
+        // 当前线程抢锁后，可重入锁会加一
         if ( lockData != null )
         {
             // re-entering
             lockData.lockCount.incrementAndGet();
             return true;
         }
-
+        // 尝试获取锁
         String lockPath = internals.attemptLock(time, unit, getLockNodeBytes());
         if ( lockPath != null )
         {
+            // 保存当前锁对象
             LockData        newLockData = new LockData(currentThread, lockPath);
             threadData.put(currentThread, newLockData);
             return true;

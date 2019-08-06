@@ -148,6 +148,7 @@ public class LockInternals
 
     public static List<String> getSortedChildren(CuratorFramework client, String basePath, final String lockName, final LockInternalsSorter sorter) throws Exception
     {
+        // 对base路径的，临时节点进行排序
         List<String> children = client.getChildren().forPath(basePath);
         List<String> sortedList = Lists.newArrayList(children);
         Collections.sort
@@ -220,6 +221,7 @@ public class LockInternals
                 }
                 else
                 {
+                    //创建lock临时节点 /toc/trigger/_c_341604ef-de97-4323-b0c8-54d19c0245bf-lock-0000000001
                     ourPath = client.create().creatingParentsIfNeeded().withProtection().withMode(CreateMode.EPHEMERAL_SEQUENTIAL).forPath(path);
                 }
                 hasTheLock = internalLockLoop(startMillis, millisToWait, ourPath);
@@ -280,16 +282,16 @@ public class LockInternals
 
             while ( (client.getState() == CuratorFrameworkState.STARTED) && !haveTheLock )
             {
-                List<String>        children = getSortedChildren();
+                List<String>        children = getSortedChildren();// 排序之后的临时节点
                 String              sequenceNodeName = ourPath.substring(basePath.length() + 1); // +1 to include the slash
 
                 PredicateResults    predicateResults = driver.getsTheLock(client, children, sequenceNodeName, maxLeases);
                 if ( predicateResults.getsTheLock() )
                 {
-                    haveTheLock = true;
+                    haveTheLock = true;// 抢锁成功
                 }
                 else
-                {
+                {    //抢锁失败，则会watch上一个节点
                     String  previousSequencePath = basePath + "/" + predicateResults.getPathToWatch();
 
                     synchronized(this)
@@ -297,7 +299,7 @@ public class LockInternals
                         try 
                         {
                             // use getData() instead of exists() to avoid leaving unneeded watchers which is a type of resource leak
-                            client.getData().usingWatcher(watcher).forPath(previousSequencePath);
+                            client.getData().usingWatcher(watcher).forPath(previousSequencePath); //添加watch
                             if ( millisToWait != null )
                             {
                                 millisToWait -= (System.currentTimeMillis() - startMillis);
@@ -312,6 +314,7 @@ public class LockInternals
                             }
                             else
                             {
+                                // 未抢到锁，则无限等待，阻塞运行
                                 wait();
                             }
                         }
@@ -325,7 +328,7 @@ public class LockInternals
         }
         catch ( Exception e )
         {
-            doDelete = true;
+            doDelete = true;// 如果超时或者异常，则会删除本节点
             throw e;
         }
         finally

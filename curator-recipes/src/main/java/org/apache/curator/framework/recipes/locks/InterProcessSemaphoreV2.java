@@ -198,7 +198,7 @@ public class InterProcessSemaphoreV2
      */
     public Lease acquire() throws Exception
     {
-        Collection<Lease> leases = acquire(1, 0, null);
+        Collection<Lease> leases = acquire(1, 0, null);  // leases不为空，表示leader
         return leases.iterator().next();
     }
 
@@ -270,11 +270,11 @@ public class InterProcessSemaphoreV2
                 boolean isDone = false;
                 while ( !isDone )
                 {
-                    switch ( internalAcquire1Lease(builder, startMs, hasWait, waitMs) )
+                    switch ( internalAcquire1Lease(builder, startMs, hasWait, waitMs) ) // 尝试选举出leader
                     {
                         case CONTINUE:
                         {
-                            isDone = true;
+                            isDone = true; // leader已经选出
                             break;
                         }
 
@@ -340,21 +340,21 @@ public class InterProcessSemaphoreV2
         {
             PathAndBytesable<String> createBuilder = client.create().creatingParentsIfNeeded().withProtection().withMode(CreateMode.EPHEMERAL_SEQUENTIAL);
             String path = (nodeData != null) ? createBuilder.forPath(ZKPaths.makePath(leasesPath, LEASE_BASE_NAME), nodeData) : createBuilder.forPath(ZKPaths.makePath(leasesPath, LEASE_BASE_NAME));
-            String nodeName = ZKPaths.getNodeFromPath(path);
+            String nodeName = ZKPaths.getNodeFromPath(path);//创建leases节点
             builder.add(makeLease(path));
 
             synchronized(this)
             {
                 for(;;)
                 {
-                    List<String> children = client.getChildren().usingWatcher(watcher).forPath(leasesPath);
+                    List<String> children = client.getChildren().usingWatcher(watcher).forPath(leasesPath);//监听leases节点
                     if ( !children.contains(nodeName) )
                     {
                         log.error("Sequential path not found: " + path);
                         return InternalAcquireResult.RETRY_DUE_TO_MISSING_NODE;
                     }
 
-                    if ( children.size() <= maxLeases )
+                    if ( children.size() <= maxLeases ) //如果children下的节点<=1表示已经抢锁成功
                     {
                         break;
                     }
@@ -376,7 +376,7 @@ public class InterProcessSemaphoreV2
         }
         finally
         {
-            lock.release();
+            lock.release();//locks锁节点释放
         }
         return InternalAcquireResult.CONTINUE;
     }
